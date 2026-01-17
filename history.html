@@ -6,6 +6,7 @@
     <title>Riwayat Booking - StudioMusik Jjenaissante</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
     <style>
         :root {
             --primary-color: #4f46e5;
@@ -810,6 +811,40 @@
             
             filteredBookings.forEach(booking => {
                 const row = document.createElement('tr');
+
+                let actionBtns = `
+                    <button class="btn btn-sm btn-primary" onclick="showBookingDetail('${booking.id_booking}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                `;
+
+                // Logic Tombol Bayar
+                // Muncul jika status 'pending' DAN (belum ada bukti OR status_pembayaran bukan 'paid'/'waiting_verification')
+                // Namun simplifikasinya: Jika status booking 'pending', kita cek status_pembayaran
+
+                const isPaidOrWaiting = booking.status_pembayaran === 'waiting_verification' || booking.status_pembayaran === 'paid';
+
+                if (booking.status_booking === 'pending' && !isPaidOrWaiting) {
+                    actionBtns += `
+                        <button class="btn btn-sm btn-accent" onclick="showPaymentModal('${booking.id_booking}', '${formatCurrency(booking.total_bayar)}')" title="Bayar Sekarang">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="cancelBooking('${booking.id_booking}')" title="Batalkan">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                } else if (booking.status_booking === 'pending' && isPaidOrWaiting) {
+                     actionBtns += `<span style="font-size:0.75rem; color:#f59e0b; margin-left:5px;">Verifikasi...</span>`;
+                }
+
+                if (booking.status_booking === 'confirmed') {
+                    actionBtns += `
+                        <button class="btn btn-sm btn-success" onclick="showReceipt('${booking.id_booking}')" title="Lihat Struk" style="background:#10b981; color:white;">
+                            <i class="fas fa-receipt"></i>
+                        </button>
+                    `;
+                }
+
                 row.innerHTML = `
                     <td><strong>${booking.id_booking}</strong></td>
                     <td>
@@ -828,15 +863,8 @@
                         </span>
                     </td>
                     <td>
-                        <div style="display: flex; gap: 0.25rem;">
-                            <button class="btn btn-sm btn-primary" onclick="showBookingDetail('${booking.id_booking}')">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            ${booking.status_booking === 'pending' ? `
-                                <button class="btn btn-sm btn-danger" onclick="cancelBooking('${booking.id_booking}')">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            ` : ''}
+                        <div style="display: flex; gap: 0.25rem; align-items:center;">
+                            ${actionBtns}
                         </div>
                     </td>
                 `;
@@ -953,6 +981,170 @@
                 </div>
                 <button class="btn btn-primary" onclick="closeModal()">OK</button>
             `);
+        }
+
+        // --- PAYMENT & RECEIPT ---
+        function showPaymentModal(bookingId, totalAmount) {
+            const html = `
+                <div class="payment-modal-body">
+                    <div class="payment-qris-container">
+                        <img src="img/qris_dummy.svg" alt="QRIS Code">
+                    </div>
+                    <div class="payment-amount">${totalAmount}</div>
+
+                    <div class="payment-instructions">
+                        <strong>Cara Pembayaran:</strong>
+                        <ol>
+                            <li>Scan QRIS di atas menggunakan e-wallet (GoPay, OVO, Dana, dll) atau Mobile Banking.</li>
+                            <li>Periksa nominal pembayaran.</li>
+                            <li>Selesaikan pembayaran.</li>
+                            <li>Screenshot bukti pembayaran dan upload di bawah ini.</li>
+                        </ol>
+                    </div>
+
+                    <form id="payment-form" onsubmit="handlePaymentSubmit(event, '${bookingId}')">
+                        <div class="upload-area" onclick="document.getElementById('proof_file').click()">
+                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                            <div class="upload-text">Klik untuk upload bukti pembayaran</div>
+                            <input type="file" id="proof_file" name="bukti_pembayaran" accept="image/*,application/pdf" style="display: none" onchange="previewFile(this)" required>
+                            <div class="file-preview" id="file-preview">
+                                <img id="preview-img" src="">
+                                <p id="filename" style="margin-top:0.5rem; font-size:0.8rem;"></p>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%">
+                            <i class="fas fa-check-circle"></i> Konfirmasi Pembayaran
+                        </button>
+                    </form>
+                </div>
+            `;
+            showModal('Pembayaran', html);
+        }
+
+        function previewFile(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('file-preview');
+                    const img = document.getElementById('preview-img');
+
+                    if (input.files[0].type.startsWith('image/')) {
+                        img.src = e.target.result;
+                        img.style.display = 'block';
+                    } else {
+                        img.style.display = 'none';
+                    }
+
+                    document.getElementById('filename').textContent = input.files[0].name;
+                    preview.style.display = 'block';
+                    document.querySelector('.upload-text').style.display = 'none';
+                    document.querySelector('.upload-icon').style.display = 'none';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        async function handlePaymentSubmit(e, bookingId) {
+            e.preventDefault();
+            const form = e.target;
+            const fileInput = document.getElementById('proof_file');
+
+            if (!fileInput.files.length) {
+                alert('Mohon upload bukti pembayaran');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('id_booking', bookingId);
+            formData.append('bukti_pembayaran', fileInput.files[0]);
+
+            const btn = form.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="loading"></span> Mengupload...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('api.php?endpoint=upload-proof', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showModal('Sukses', `
+                        <div class="text-center">
+                            <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--accent-color); margin-bottom: 1rem;"></i>
+                            <h3>Pembayaran Berhasil Dikirim!</h3>
+                            <p>Admin akan segera memverifikasi pembayaran Anda.</p>
+                        </div>
+                    `);
+                    setTimeout(() => {
+                        closeModal();
+                        loadUserHistory();
+                    }, 2000);
+                } else {
+                    alert('Gagal: ' + result.message);
+                }
+            } catch (err) {
+                alert('Terjadi kesalahan saat upload.');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function showReceipt(bookingId) {
+            const booking = userBookings.find(b => b.id_booking === bookingId);
+            if (!booking) return;
+
+            const html = `
+                <div style="border: 2px dashed #333; padding: 20px; text-align: center; position: relative;">
+                    <div style="font-size: 2rem; color: #10b981; font-weight: bold; border: 3px solid #10b981; display: inline-block; padding: 5px 20px; transform: rotate(-10deg); position: absolute; top: 20px; right: 20px; opacity: 0.5;">
+                        LUNAS
+                    </div>
+
+                    <h2 style="margin-bottom: 5px;"><i class="fas fa-music"></i> StudioMusik</h2>
+                    <p style="font-size: 0.8rem; margin-bottom: 20px;">Jl. Aji Stone no 32, Batam Selatan</p>
+
+                    <hr style="border-top: 1px dashed #ccc; margin: 15px 0;">
+
+                    <div style="text-align: left; margin-bottom: 20px;">
+                        <p><strong>ID Booking:</strong> ${booking.id_booking}</p>
+                        <p><strong>Tanggal:</strong> ${formatDate(booking.tanggal_booking)}</p>
+                        <p><strong>Pelanggan:</strong> ${booking.nama_user || currentUser.nama_user}</p>
+                    </div>
+
+                    <table style="width: 100%; text-align: left; margin-bottom: 20px; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <th style="padding: 5px;">Item</th>
+                            <th style="padding: 5px; text-align: right;">Harga</th>
+                        </tr>
+                        <tr>
+                            <td style="padding: 5px;">
+                                ${booking.nama_studio} - ${booking.nama_ruangan}<br>
+                                <small>${booking.jam_mulai} - ${booking.jam_selesai} (${booking.durasi} Jam)</small>
+                            </td>
+                            <td style="padding: 5px; text-align: right;">
+                                ${formatCurrency(booking.total_bayar)}
+                            </td>
+                        </tr>
+                        <tr style="border-top: 1px solid #333; font-weight: bold;">
+                            <td style="padding: 10px 5px;">TOTAL</td>
+                            <td style="padding: 10px 5px; text-align: right;">${formatCurrency(booking.total_bayar)}</td>
+                        </tr>
+                    </table>
+
+                    <p style="font-size: 0.8rem; color: #666;">Terima kasih telah melakukan booking di StudioMusik Jjenaissante.</p>
+                    <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">Simpan bukti ini sebagai tiket masuk.</p>
+
+                    <div style="margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="window.print()">
+                            <i class="fas fa-print"></i> Cetak / Simpan PDF
+                        </button>
+                    </div>
+                </div>
+            `;
+            showModal('E-Receipt', html);
         }
     </script>
 </body>
