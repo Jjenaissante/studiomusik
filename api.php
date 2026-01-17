@@ -133,7 +133,7 @@ switch ($endpoint) {
 
             // Upload
             $filename = 'proof_' . $id_booking . '_' . time() . '.' . $ext;
-            $target = 'uploads/' . $filename;
+            $target = 'bukti_pembayaran/' . $filename;
 
             if (move_uploaded_file($file['tmp_name'], $target)) {
                 // Update detail_booking
