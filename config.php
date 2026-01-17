@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // 2. DATABASE CONFIG
 $db_config = [
-    'host'     => 'localhost',
+    'host'     => '127.0.0.1',
     'user'     => 'root',        
     'pass'     => '',            
     'db_name'  => 'studio_musik',

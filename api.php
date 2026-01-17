@@ -13,7 +13,7 @@ header('Access-Control-Allow-Methods: GET, POST');
 
 // 3. DATABASE CONFIG
 $db_config = [
-    'host'     => 'localhost',
+    'host'     => '127.0.0.1',
     'user'     => 'root',
     'pass'     => '',
     'db_name'  => 'studio_musik',
@@ -97,7 +97,7 @@ switch ($endpoint) {
             $whereClause .= ($whereClause ? " AND " : " WHERE ") . "b.status_booking = '$status'";
         }
 
-        $sql = "SELECT b.*, u.nama_user, u.no_hp, s.nama_studio, r.nama_ruangan, d.total_bayar 
+        $sql = "SELECT b.*, u.nama_user, u.no_hp, s.nama_studio, r.nama_ruangan, d.total_bayar, d.status_pembayaran, d.bukti_pembayaran
                 FROM booking b
                 JOIN user u ON b.id_user = u.id_user
                 JOIN ruangan r ON b.id_ruangan = r.id_ruangan
@@ -112,6 +112,42 @@ switch ($endpoint) {
             while($row = $result->fetch_assoc()) $data[] = $row;
         }
         echo json_encode(['success' => true, 'data' => $data]);
+        break;
+
+    // --- UPLOAD BUKTI TRANSFER ---
+    case 'upload-proof':
+        if ($method === 'POST') {
+            if (!isset($_POST['id_booking']) || !isset($_FILES['bukti_pembayaran'])) {
+                echo json_encode(['success' => false, 'message' => 'Data tidak lengkap']); exit;
+            }
+
+            $id_booking = clean_input($_POST['id_booking']);
+            $file = $_FILES['bukti_pembayaran'];
+
+            // Validasi file
+            $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed)) {
+                echo json_encode(['success' => false, 'message' => 'Format file tidak didukung']); exit;
+            }
+
+            // Upload
+            $filename = 'proof_' . $id_booking . '_' . time() . '.' . $ext;
+            $target = 'uploads/' . $filename;
+
+            if (move_uploaded_file($file['tmp_name'], $target)) {
+                // Update detail_booking
+                $sql = "UPDATE detail_booking SET bukti_pembayaran='$filename', status_pembayaran='waiting_verification' WHERE id_booking='$id_booking'";
+                if ($conn->query($sql)) {
+                    // Juga update status booking jika perlu (tapi booking tetap pending sampai admin confirm)
+                    echo json_encode(['success' => true, 'message' => 'Bukti pembayaran berhasil diupload']);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Database error']);
+                }
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Gagal upload file']);
+            }
+        }
         break;
 
     // --- DATA STUDIO (Public) ---
@@ -156,6 +192,19 @@ switch ($endpoint) {
             
             $jam_selesai = date('H:i', strtotime("$jam + $durasi hours"));
             
+            // Validasi Double Booking
+            $checkSql = "SELECT * FROM booking
+                        WHERE id_ruangan = '$id_ruangan'
+                        AND tanggal_booking = '$tgl'
+                        AND status_booking != 'cancelled'
+                        AND (
+                            (jam_mulai < '$jam_selesai' AND jam_selesai > '$jam')
+                        )";
+            $checkRes = $conn->query($checkSql);
+            if ($checkRes->num_rows > 0) {
+                 echo json_encode(['success' => false, 'message' => 'Maaf, slot waktu ini sudah dibooking orang lain.']); exit;
+            }
+
             $sql = "INSERT INTO booking (id_booking, id_user, id_ruangan, tanggal_booking, jam_mulai, jam_selesai, durasi, status_booking, catatan) 
                     VALUES ('$id_booking', '$id_user', '$id_ruangan', '$tgl', '$jam', '$jam_selesai', '$durasi', 'pending', '$catatan')";
             
@@ -265,7 +314,30 @@ switch ($endpoint) {
 
     // --- UTILS ---
     case 'available-slots':
-        echo json_encode(['success' => true, 'data' => []]);
+        $id_ruangan = isset($_GET['id_ruangan']) ? clean_input($_GET['id_ruangan']) : '';
+        $date = isset($_GET['date']) ? clean_input($_GET['date']) : '';
+
+        if (!$id_ruangan || !$date) {
+             echo json_encode(['success' => false, 'message' => 'Missing params']); exit;
+        }
+
+        $sql = "SELECT jam_mulai, jam_selesai FROM booking
+                WHERE id_ruangan = '$id_ruangan'
+                AND tanggal_booking = '$date'
+                AND status_booking != 'cancelled'";
+
+        $result = $conn->query($sql);
+        $booked_slots = [];
+
+        while($row = $result->fetch_assoc()) {
+            $booked_slots[] = [
+                'start' => substr($row['jam_mulai'], 0, 5),
+                'end' => substr($row['jam_selesai'], 0, 5),
+                'available' => false
+            ];
+        }
+
+        echo json_encode(['success' => true, 'data' => $booked_slots]);
         break;
 
     default:
