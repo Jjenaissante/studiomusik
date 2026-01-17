@@ -76,7 +76,7 @@ CREATE TABLE `detail_booking` (
   `tanggal_pembayaran` date DEFAULT NULL,
   `total_bayar` decimal(10,3) NOT NULL,
   `metode_pembayaran` enum('cash','transfer','online') DEFAULT NULL,
-  `status_pembayaran` enum('pending','paid','refunded','failed') DEFAULT 'pending',
+  `status_pembayaran` varchar(50) DEFAULT 'pending',
   `bukti_pembayaran` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
