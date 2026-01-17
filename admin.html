@@ -919,6 +919,16 @@
 
             bookings.forEach(booking => {
                 const row = document.createElement('tr');
+
+                // Cek apakah ada bukti pembayaran
+                let proofBtn = '';
+                if (booking.bukti_pembayaran) {
+                    proofBtn = `
+                        <button class="btn btn-sm btn-info" onclick="showProof('${booking.bukti_pembayaran}')" title="Lihat Bukti Bayar" style="background:#3b82f6; color:white;">
+                            <i class="fas fa-receipt"></i>
+                        </button>`;
+                }
+
                 row.innerHTML = `
                     <td><strong>${booking.id_booking}</strong></td>
                     <td>
@@ -934,7 +944,10 @@
                         <div style="font-size: 0.875rem; color: var(--gray-600);">${booking.jam_mulai} - ${booking.jam_selesai}</div>
                     </td>
                     <td>${booking.durasi} jam</td>
-                    <td><strong>${formatCurrency(booking.total_bayar)}</strong></td>
+                    <td>
+                        <strong>${formatCurrency(booking.total_bayar)}</strong>
+                        <div style="font-size: 0.75rem;">${booking.status_pembayaran || '-'}</div>
+                    </td>
                     <td>
                         <span class="status-badge status-${booking.status_booking}">
                             ${getStatusLabel(booking.status_booking)}
@@ -942,14 +955,15 @@
                     </td>
                     <td>
                         <div style="display: flex; gap: 0.25rem;">
-                            <button class="btn btn-sm btn-primary" onclick="showBookingDetail('${booking.id_booking}')">
+                            <button class="btn btn-sm btn-primary" onclick="showBookingDetail('${booking.id_booking}')" title="Detail">
                                 <i class="fas fa-eye"></i>
                             </button>
+                            ${proofBtn}
                             ${booking.status_booking === 'pending' ? `
-                                <button class="btn btn-sm btn-accent" onclick="confirmBooking('${booking.id_booking}')">
+                                <button class="btn btn-sm btn-accent" onclick="confirmBooking('${booking.id_booking}')" title="Konfirmasi">
                                     <i class="fas fa-check"></i>
                                 </button>
-                                <button class="btn btn-sm btn-danger" onclick="cancelBooking('${booking.id_booking}')">
+                                <button class="btn btn-sm btn-danger" onclick="cancelBooking('${booking.id_booking}')" title="Batalkan">
                                     <i class="fas fa-times"></i>
                                 </button>
                             ` : ''}
@@ -1106,6 +1120,20 @@
             }
         }
 
+        // Show proof
+        function showProof(filename) {
+            showModal('Bukti Pembayaran', `
+                <div style="text-align:center;">
+                    <img src="uploads/${filename}" style="max-width:100%; max-height:500px; border:1px solid #ddd; padding:5px; border-radius:5px;">
+                    <div style="margin-top:1rem;">
+                        <a href="uploads/${filename}" target="_blank" class="btn btn-primary">
+                            <i class="fas fa-external-link-alt"></i> Buka Ukuran Penuh
+                        </a>
+                    </div>
+                </div>
+            `);
+        }
+
         // Show booking detail
         function showBookingDetail(bookingId) {
             const booking = bookingsData.find(b => b.id_booking === bookingId);
@@ -1123,7 +1151,9 @@
                     <p><strong>Durasi:</strong> ${booking.durasi} jam</p>
                     <p><strong>Total Bayar:</strong> ${formatCurrency(booking.total_bayar)}</p>
                     <p><strong>Status:</strong> <span class="status-badge status-${booking.status_booking}">${getStatusLabel(booking.status_booking)}</span></p>
+                    <p><strong>Status Pembayaran:</strong> ${booking.status_pembayaran || 'Belum dibayar'}</p>
                     ${booking.catatan ? `<p><strong>Catatan:</strong> ${booking.catatan}</p>` : ''}
+                    ${booking.bukti_pembayaran ? `<p style="margin-top:10px;"><button class="btn btn-sm btn-info" onclick="showProof('${booking.bukti_pembayaran}')">Lihat Bukti Bayar</button></p>` : ''}
                 </div>
             `);
         }
