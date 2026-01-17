@@ -116,6 +116,10 @@
             cursor: pointer;
             transition: background 0.3s ease;
             font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
 
         .btn-auth:hover {
@@ -169,7 +173,6 @@
             border-radius: 50%;
             border-top-color: white;
             animation: spin 1s ease-in-out infinite;
-            margin-right: 0.5rem;
         }
 
         @keyframes spin {
@@ -273,7 +276,7 @@
             }
 
             // Disable button and show loading
-            btnSubmit.innerHTML = '<span class="loading"></span>Memproses...';
+            btnSubmit.innerHTML = '<span class="loading"></span> Memproses...';
             btnSubmit.disabled = true;
 
             try {
